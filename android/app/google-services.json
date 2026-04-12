@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "375034784088",
+    "project_id": "amptrail31",
+    "storage_bucket": "amptrail31.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:375034784088:android:5faa96cb3826accf3d9d2d",
+        "android_client_info": {
+          "package_name": "com.amptrail.mini"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwywI73WOJh1HoFpVvR9GNWa5rdQY0-jk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:375034784088:android:158feebb084d47403d9d2d",
+        "android_client_info": {
+          "package_name": "com.example.amptrail_mini"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwywI73WOJh1HoFpVvR9GNWa5rdQY0-jk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:375034784088:android:768e3b6c91df55f03d9d2d",
+        "android_client_info": {
+          "package_name": "com.roadcare.road_care"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwywI73WOJh1HoFpVvR9GNWa5rdQY0-jk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
