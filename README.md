@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Google-Gemini%202.5%20Flash-4285F4?style=flat-square&logo=google&logoColor=white" />
   <img src="https://img.shields.io/badge/Google%20Maps-Location-34A853?style=flat-square&logo=googlemaps&logoColor=white" />
   <img src="https://img.shields.io/badge/Riverpod-State%20Management-6C63FF?style=flat-square" />
-  <img src="https://img.shields.io/badge/Status-Production%20Ready-success?style=flat-square" />
+  
 </p>
 
 </div>
