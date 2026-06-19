@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());
@@ -24,11 +24,6 @@ class AuthNotifier extends StateNotifier<AsyncValue<void>> {
 
   AuthNotifier(this._authService) : super(const AsyncValue.data(null));
 
-  Future<void> signInAnonymously() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _authService.signInAnonymously());
-  }
-
   Future<void> signIn(String email, String password) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
@@ -39,40 +34,6 @@ class AuthNotifier extends StateNotifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
         () => _authService.createAccount(email, password, name));
-  }
-
-  Future<void> verifyPhone({
-    required String phoneNumber,
-    required void Function(String verificationId, int? resendToken) onCodeSent,
-    required void Function(FirebaseAuthException e) onVerificationFailed,
-    required void Function(PhoneAuthCredential credential) onVerificationCompleted,
-  }) async {
-    state = const AsyncValue.loading();
-    try {
-      await _authService.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
-        onCodeSent: (verificationId, resendToken) {
-          state = const AsyncValue.data(null);
-          onCodeSent(verificationId, resendToken);
-        },
-        onVerificationFailed: (e) {
-          state = AsyncValue.error(e, StackTrace.current);
-          onVerificationFailed(e);
-        },
-        onVerificationCompleted: (credential) {
-          state = const AsyncValue.data(null);
-          onVerificationCompleted(credential);
-        },
-      );
-    } catch (e, stack) {
-      state = AsyncValue.error(e, stack);
-    }
-  }
-
-  Future<void> signInWithOTP(String verificationId, String smsCode) async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(
-        () => _authService.signInWithOTP(verificationId, smsCode));
   }
 
   Future<void> signOut() async {

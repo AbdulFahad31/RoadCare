@@ -16,7 +16,7 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authService = ref.watch(authServiceProvider);
-    final reportsAsync = ref.watch(allPotholesProvider);
+    final reportsAsync = ref.watch(userPotholesProvider(authService.userId));
     final isAdmin = ref.watch(isAdminProvider);
 
     return Scaffold(
@@ -85,7 +85,9 @@ class ProfileScreen extends ConsumerWidget {
             ),
             child: Center(
               child: Text(
-                isAnon || name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
+                isAnon || name.isEmpty
+                    ? '?'
+                    : name.substring(0, 1).toUpperCase(),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 28,
@@ -116,7 +118,8 @@ class ProfileScreen extends ConsumerWidget {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.15),
+                                color:
+                                    AppColors.primary.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: const Text(
@@ -139,7 +142,7 @@ class ProfileScreen extends ConsumerWidget {
                 Text(
                   isAnon
                       ? 'Sign in to track your reports'
-                      : authService.currentUser?.phoneNumber ?? 'No phone number',
+                      : authService.currentUser?.email ?? 'No email',
                   style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
@@ -379,9 +382,9 @@ class _QuickStat extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Column(
           children: [

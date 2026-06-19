@@ -1,10 +1,16 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../report/models/pothole_report.dart';
 import '../services/pothole_service.dart';
 import '../services/storage_service.dart';
 import '../services/location_service.dart';
+import '../services/ai_analysis_service.dart';
+import '../services/offline_sync_service.dart';
+import '../models/ai_analysis.dart';
+import '../../../core/utils/retry_utils.dart';
 import '../../../features/auth/providers/auth_providers.dart';
 
 // Services
@@ -17,9 +23,17 @@ final storageServiceProvider =
 final locationServiceProvider =
     Provider<LocationService>((ref) => LocationService());
 
+final aiAnalysisServiceProvider =
+    Provider<AiAnalysisService>((ref) => AiAnalysisService());
+
 // Streams
 final allPotholesProvider = StreamProvider<List<PotholeReport>>((ref) {
   return ref.watch(potholeServiceProvider).watchAllPotholes();
+});
+
+final userPotholesProvider =
+    StreamProvider.family<List<PotholeReport>, String>((ref, userId) {
+  return ref.watch(potholeServiceProvider).watchUserPotholes(userId);
 });
 
 final nearbyPotholesProvider =
@@ -59,6 +73,11 @@ class ReportSubmissionState {
   final String? userName;
   final String? userPhone;
 
+  // AI analysis state fields
+  final bool isAnalyzing;
+  final AiAnalysis? aiAnalysis;
+  final String? aiError;
+
   const ReportSubmissionState({
     this.isLoading = false,
     this.error,
@@ -69,6 +88,9 @@ class ReportSubmissionState {
     this.severity = PotholeSeverity.medium,
     this.userName,
     this.userPhone,
+    this.isAnalyzing = false,
+    this.aiAnalysis,
+    this.aiError,
   });
 
   ReportSubmissionState copyWith({
@@ -81,8 +103,13 @@ class ReportSubmissionState {
     PotholeSeverity? severity,
     String? userName,
     String? userPhone,
+    bool? isAnalyzing,
+    AiAnalysis? aiAnalysis,
+    String? aiError,
     bool clearError = false,
     bool clearImage = false,
+    bool clearAiError = false,
+    bool clearAiAnalysis = false,
   }) {
     return ReportSubmissionState(
       isLoading: isLoading ?? this.isLoading,
@@ -94,6 +121,9 @@ class ReportSubmissionState {
       severity: severity ?? this.severity,
       userName: userName ?? this.userName,
       userPhone: userPhone ?? this.userPhone,
+      isAnalyzing: isAnalyzing ?? this.isAnalyzing,
+      aiAnalysis: clearAiAnalysis ? null : (aiAnalysis ?? this.aiAnalysis),
+      aiError: clearAiError ? null : (aiError ?? this.aiError),
     );
   }
 }
@@ -112,7 +142,12 @@ class ReportSubmissionNotifier extends StateNotifier<ReportSubmissionState> {
   ) : super(const ReportSubmissionState());
 
   void setImage(File image) {
-    state = state.copyWith(selectedImage: image);
+    // Reset AI state when a new image is selected
+    state = state.copyWith(
+      selectedImage: image,
+      clearAiAnalysis: true,
+      clearAiError: true,
+    );
   }
 
   void setDescription(String description) {
@@ -137,7 +172,60 @@ class ReportSubmissionNotifier extends StateNotifier<ReportSubmissionState> {
     }
   }
 
+  /// Triggers AI analysis on the currently selected image
+  Future<void> analyzeImageWithAi() async {
+    if (state.isAnalyzing) return; // Concurrency guard
+    if (state.selectedImage == null) {
+      state = state.copyWith(error: 'Please select an image first.');
+      return;
+    }
+
+    state = state.copyWith(
+      isAnalyzing: true,
+      clearAiError: true,
+      clearError: true,
+    );
+
+    final stopwatch = Stopwatch()..start();
+
+    try {
+      final aiService = _ref.read(aiAnalysisServiceProvider);
+      final analysis = await aiService.analyzeImage(state.selectedImage!);
+
+      // Map AI severity to local PotholeSeverity enum
+      final mappedSeverity = PotholeSeverityExtension.fromString(
+        analysis.severity.toLowerCase(),
+      );
+
+      stopwatch.stop();
+      if (kDebugMode) {
+        debugPrint(
+            '⏱️ AI analysis completed in ${stopwatch.elapsedMilliseconds}ms');
+      }
+
+      state = state.copyWith(
+        isAnalyzing: false,
+        aiAnalysis: analysis,
+        severity: mappedSeverity,
+        description: analysis.description,
+      );
+    } catch (e) {
+      stopwatch.stop();
+      if (kDebugMode) {
+        debugPrint(
+            '⏱️ AI analysis failed after ${stopwatch.elapsedMilliseconds}ms: $e');
+      }
+
+      // AI analysis fails, but we don't block manual report submission
+      state = state.copyWith(
+        isAnalyzing: false,
+        aiError: 'AI analysis failed: $e',
+      );
+    }
+  }
+
   Future<void> submitReport() async {
+    if (state.isLoading) return; // Concurrency guard
     if (state.selectedImage == null) {
       state = state.copyWith(error: 'Please select an image');
       return;
@@ -149,13 +237,64 @@ class ReportSubmissionNotifier extends StateNotifier<ReportSubmissionState> {
 
     state = state.copyWith(isLoading: true, clearError: true);
 
+    // Check connectivity first
+    try {
+      final connectivity = Connectivity();
+      final results = await connectivity.checkConnectivity();
+      final hasInternet =
+          results.isNotEmpty && !results.contains(ConnectivityResult.none);
+
+      if (!hasInternet) {
+        final offlineReport = OfflineReport(
+          latitude: state.location!.latitude,
+          longitude: state.location!.longitude,
+          description: state.description ?? '',
+          severity: state.severity.value,
+          userName:
+              state.userName ?? _ref.read(authServiceProvider).displayName,
+          userPhone: state.userPhone ??
+              _ref.read(authServiceProvider).currentUser?.phone,
+          localImagePath: state.selectedImage!.path,
+          timestamp: DateTime.now(),
+          damageType: state.aiAnalysis?.damageType,
+          repairPriority: state.aiAnalysis?.repairPriority,
+          estimatedDiameterCm: state.aiAnalysis?.estimatedDiameterCm,
+          estimatedDepthCm: state.aiAnalysis?.estimatedDepthCm,
+          confidence: state.aiAnalysis?.confidence,
+          safetyWarning: state.aiAnalysis?.safetyWarning,
+          suggestedAction: state.aiAnalysis?.suggestedAction,
+          aiGenerated: state.aiAnalysis != null,
+        );
+
+        await _ref
+            .read(offlineSyncServiceProvider.notifier)
+            .queueReport(offlineReport);
+        state = state.copyWith(isLoading: false, isSuccess: true);
+        return;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Error checking connectivity, trying normal upload: $e');
+      }
+    }
+
     try {
       final userId = _ref.read(authServiceProvider).userId;
 
+      final uploadStopwatch = Stopwatch()..start();
       // Upload image
-      final imageUrl =
-          await _storageService.uploadPotholeImage(state.selectedImage!);
+      final imageUrl = await RetryUtils.retry(
+        operationName: 'uploadPotholeImage',
+        operation: () =>
+            _storageService.uploadPotholeImage(state.selectedImage!),
+      );
+      uploadStopwatch.stop();
+      if (kDebugMode) {
+        debugPrint(
+            '⏱️ Image upload took ${uploadStopwatch.elapsedMilliseconds}ms');
+      }
 
+      final submitStopwatch = Stopwatch()..start();
       // Create report
       final report = PotholeReport(
         id: '',
@@ -171,10 +310,27 @@ class ReportSubmissionNotifier extends StateNotifier<ReportSubmissionState> {
         upvotedBy: const [],
         userName: state.userName ?? _ref.read(authServiceProvider).displayName,
         userPhone: state.userPhone ??
-            _ref.read(authServiceProvider).currentUser?.phoneNumber,
+            _ref.read(authServiceProvider).currentUser?.phone,
+
+        // AI analysis fields (optional, populated only if AI analysis completed successfully)
+        damageType: state.aiAnalysis?.damageType,
+        repairPriority: state.aiAnalysis?.repairPriority,
+        estimatedDiameterCm: state.aiAnalysis?.estimatedDiameterCm,
+        estimatedDepthCm: state.aiAnalysis?.estimatedDepthCm,
+        confidence: state.aiAnalysis?.confidence,
+        safetyWarning: state.aiAnalysis?.safetyWarning,
+        suggestedAction: state.aiAnalysis?.suggestedAction,
+        aiGenerated: state.aiAnalysis != null,
+        generatedAt: state.aiAnalysis != null ? DateTime.now() : null,
       );
 
       await _potholeService.addPothole(report);
+      submitStopwatch.stop();
+      if (kDebugMode) {
+        debugPrint(
+            '⏱️ Report submission took ${submitStopwatch.elapsedMilliseconds}ms');
+      }
+
       state = state.copyWith(isLoading: false, isSuccess: true);
     } catch (e) {
       state = state.copyWith(error: e.toString(), isLoading: false);

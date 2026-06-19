@@ -300,13 +300,15 @@ class _ReportCard extends StatelessWidget {
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isMe ? AppColors.primary.withOpacity(0.5) : AppColors.border,
+                color: isMe
+                    ? AppColors.primary.withValues(alpha: 0.5)
+                    : AppColors.border,
                 width: isMe ? 1.5 : 1,
               ),
               boxShadow: isMe
                   ? [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       )
@@ -335,7 +337,8 @@ class _ReportCard extends StatelessWidget {
                           ),
                           errorWidget: (_, __, ___) => Container(
                             color: AppColors.surfaceVariant,
-                            child: const Icon(Icons.image_not_supported_outlined,
+                            child: const Icon(
+                                Icons.image_not_supported_outlined,
                                 color: AppColors.textTertiary),
                           ),
                         ),
@@ -376,7 +379,7 @@ class _ReportCard extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: statusColor.withOpacity(0.1),
+                                color: statusColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -405,11 +408,18 @@ class _ReportCard extends StatelessWidget {
                                 color: AppColors.textTertiary, size: 11),
                             const SizedBox(width: 4),
                             Text(
-                              isMe ? 'You' : (report.userName?.isNotEmpty ?? false ? report.userName! : 'Anonymous'),
+                              isMe
+                                  ? 'You'
+                                  : (report.userName?.isNotEmpty ?? false
+                                      ? report.userName!
+                                      : 'Anonymous'),
                               style: TextStyle(
-                                color: isMe ? AppColors.primary : AppColors.textTertiary,
+                                color: isMe
+                                    ? AppColors.primary
+                                    : AppColors.textTertiary,
                                 fontSize: 11,
-                                fontWeight: isMe ? FontWeight.w600 : FontWeight.normal,
+                                fontWeight:
+                                    isMe ? FontWeight.w600 : FontWeight.normal,
                               ),
                             ),
                           ],
@@ -508,8 +518,9 @@ class _FilterChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color:
-              isSelected ? color.withOpacity(0.15) : AppColors.surfaceVariant,
+          color: isSelected
+              ? color.withValues(alpha: 0.15)
+              : AppColors.surfaceVariant,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected ? color : AppColors.border,

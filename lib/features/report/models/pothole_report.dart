@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 enum PotholeStatus { reported, inProgress, fixed }
 
 enum PotholeSeverity { low, medium, high }
@@ -89,6 +87,19 @@ class PotholeReport {
   final String? address;
   final String? userName;
   final String? userPhone;
+  final String? fixedMessage;
+  final String? fixedByName;
+
+  // AI Analysis Columns
+  final String? damageType;
+  final String? repairPriority;
+  final double? estimatedDiameterCm;
+  final double? estimatedDepthCm;
+  final int? confidence;
+  final String? safetyWarning;
+  final String? suggestedAction;
+  final bool aiGenerated;
+  final DateTime? generatedAt;
 
   const PotholeReport({
     required this.id,
@@ -105,49 +116,88 @@ class PotholeReport {
     this.address,
     this.userName,
     this.userPhone,
+    this.fixedMessage,
+    this.fixedByName,
+    this.damageType,
+    this.repairPriority,
+    this.estimatedDiameterCm,
+    this.estimatedDepthCm,
+    this.confidence,
+    this.safetyWarning,
+    this.suggestedAction,
+    this.aiGenerated = false,
+    this.generatedAt,
   });
 
-  factory PotholeReport.fromFirestore(
-    DocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
-    final data = doc.data()!;
+  factory PotholeReport.fromJson(Map<String, dynamic> json) {
     return PotholeReport(
-      id: doc.id,
-      imageUrl: data['imageUrl'] as String? ?? '',
-      latitude: (data['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (data['longitude'] as num?)?.toDouble() ?? 0.0,
-      description: data['description'] as String? ?? '',
-      userId: data['userId'] as String? ?? '',
-      upvotes: data['upvotes'] as int? ?? 0,
+      id: json['id'] as String? ?? '',
+      imageUrl: json['image_url'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
+      description: json['description'] as String? ?? '',
+      userId: json['user_id'] as String? ?? '',
+      upvotes: json['upvotes'] as int? ?? 0,
       status: PotholeStatusExtension.fromString(
-        data['status'] as String? ?? 'reported',
+        json['status'] as String? ?? 'reported',
       ),
       severity: PotholeSeverityExtension.fromString(
-        data['severity'] as String? ?? 'low',
+        json['severity'] as String? ?? 'low',
       ),
-      timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      upvotedBy: List<String>.from(data['upvotedBy'] as List? ?? []),
-      address: data['address'] as String?,
-      userName: data['userName'] as String?,
-      userPhone: data['userPhone'] as String?,
+      timestamp: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String).toLocal()
+          : DateTime.now(),
+      upvotedBy: json['upvoted_by'] != null
+          ? List<String>.from(json['upvoted_by'] as List)
+          : const [],
+      address: json['address'] as String?,
+      userName: json['user_name'] as String?,
+      userPhone: json['user_phone'] as String?,
+      fixedMessage: json['fixed_message'] as String?,
+      fixedByName: json['fixed_by_name'] as String?,
+      damageType: json['damage_type'] as String?,
+      repairPriority: json['repair_priority'] as String?,
+      estimatedDiameterCm: (json['estimated_diameter_cm'] as num?)?.toDouble(),
+      estimatedDepthCm: (json['estimated_depth_cm'] as num?)?.toDouble(),
+      confidence: json['confidence'] as int?,
+      safetyWarning: json['safety_warning'] as String?,
+      suggestedAction: json['suggested_action'] as String?,
+      aiGenerated: json['ai_generated'] as bool? ?? false,
+      generatedAt: json['generated_at'] != null
+          ? DateTime.parse(json['generated_at'] as String).toLocal()
+          : null,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toJson() {
     return {
-      'imageUrl': imageUrl,
+      if (id.isNotEmpty) 'id': id,
+      'image_url': imageUrl,
       'latitude': latitude,
       'longitude': longitude,
       'description': description,
-      'userId': userId,
+      'user_id': userId,
       'upvotes': upvotes,
       'status': status.value,
       'severity': severity.value,
-      'timestamp': Timestamp.fromDate(timestamp),
-      'upvotedBy': upvotedBy,
+      'created_at': timestamp.toUtc().toIso8601String(),
+      'upvoted_by': upvotedBy,
       'address': address,
-      'userName': userName,
-      'userPhone': userPhone,
+      'user_name': userName,
+      'user_phone': userPhone,
+      if (fixedMessage != null) 'fixed_message': fixedMessage,
+      if (fixedByName != null) 'fixed_by_name': fixedByName,
+      if (damageType != null) 'damage_type': damageType,
+      if (repairPriority != null) 'repair_priority': repairPriority,
+      if (estimatedDiameterCm != null)
+        'estimated_diameter_cm': estimatedDiameterCm,
+      if (estimatedDepthCm != null) 'estimated_depth_cm': estimatedDepthCm,
+      if (confidence != null) 'confidence': confidence,
+      if (safetyWarning != null) 'safety_warning': safetyWarning,
+      if (suggestedAction != null) 'suggested_action': suggestedAction,
+      'ai_generated': aiGenerated,
+      if (generatedAt != null)
+        'generated_at': generatedAt!.toUtc().toIso8601String(),
     };
   }
 
@@ -166,6 +216,17 @@ class PotholeReport {
     String? address,
     String? userName,
     String? userPhone,
+    String? fixedMessage,
+    String? fixedByName,
+    String? damageType,
+    String? repairPriority,
+    double? estimatedDiameterCm,
+    double? estimatedDepthCm,
+    int? confidence,
+    String? safetyWarning,
+    String? suggestedAction,
+    bool? aiGenerated,
+    DateTime? generatedAt,
   }) {
     return PotholeReport(
       id: id ?? this.id,
@@ -182,6 +243,17 @@ class PotholeReport {
       address: address ?? this.address,
       userName: userName ?? this.userName,
       userPhone: userPhone ?? this.userPhone,
+      fixedMessage: fixedMessage ?? this.fixedMessage,
+      fixedByName: fixedByName ?? this.fixedByName,
+      damageType: damageType ?? this.damageType,
+      repairPriority: repairPriority ?? this.repairPriority,
+      estimatedDiameterCm: estimatedDiameterCm ?? this.estimatedDiameterCm,
+      estimatedDepthCm: estimatedDepthCm ?? this.estimatedDepthCm,
+      confidence: confidence ?? this.confidence,
+      safetyWarning: safetyWarning ?? this.safetyWarning,
+      suggestedAction: suggestedAction ?? this.suggestedAction,
+      aiGenerated: aiGenerated ?? this.aiGenerated,
+      generatedAt: generatedAt ?? this.generatedAt,
     );
   }
 }

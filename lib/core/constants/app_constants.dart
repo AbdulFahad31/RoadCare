@@ -1,10 +1,10 @@
 class AppConstants {
-  // Firebase Collections
-  static const String potholeCollection = 'potholes';
-  static const String usersCollection = 'users';
+  // Supabase Tables
+  static const String reportsTable = 'reports';
+  static const String profilesTable = 'profiles';
 
-  // Storage Paths
-  static const String potholeImagesPath = 'pothole_images';
+  // Storage Buckets
+  static const String storageBucket = 'road-images';
 
   // Geo
   static const double duplicateRadiusMeters = 50.0;

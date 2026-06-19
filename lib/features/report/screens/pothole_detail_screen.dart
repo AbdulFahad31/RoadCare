@@ -33,7 +33,7 @@ class PotholeDetailScreen extends ConsumerWidget {
               icon: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.arrow_back_ios_new,
@@ -41,6 +41,22 @@ class PotholeDetailScreen extends ConsumerWidget {
               ),
               onPressed: () => Navigator.pop(context),
             ),
+            actions: [
+              if (report.userId == userId)
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.delete_outline,
+                        size: 20, color: AppColors.severityHigh),
+                  ),
+                  tooltip: 'Delete Report',
+                  onPressed: () => _confirmDelete(context, ref),
+                ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Hero(
                 tag: 'pothole_${report.id}',
@@ -159,6 +175,209 @@ class PotholeDetailScreen extends ConsumerWidget {
                     ),
                   ],
 
+                  if (report.aiGenerated) ...[
+                    const SizedBox(height: 16),
+                    _InfoSection(
+                      title: 'AI Inspection Summary',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color:
+                                      AppColors.primary.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.auto_awesome,
+                                        color: AppColors.primary, size: 12),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'AI Generated',
+                                      style: TextStyle(
+                                        color: AppColors.primary,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (report.confidence != null) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${report.confidence}% Match',
+                                    style: const TextStyle(
+                                      color: Colors.green,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildAiTile(
+                                    'Damage Type',
+                                    report.damageType ?? 'Unknown',
+                                    Icons.pest_control_rodent_outlined),
+                              ),
+                              Expanded(
+                                child: _buildAiTile(
+                                    'Priority',
+                                    report.repairPriority ?? 'Medium',
+                                    Icons.priority_high),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildAiTile(
+                                  'Est. Diameter',
+                                  report.estimatedDiameterCm != null
+                                      ? '${report.estimatedDiameterCm!.toStringAsFixed(1)} cm'
+                                      : 'N/A',
+                                  Icons.straighten,
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildAiTile(
+                                  'Est. Depth',
+                                  report.estimatedDepthCm != null
+                                      ? '${report.estimatedDepthCm!.toStringAsFixed(1)} cm'
+                                      : 'N/A',
+                                  Icons.vertical_align_bottom,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (report.suggestedAction != null &&
+                              report.suggestedAction!.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            _buildAiTile('Suggested Action',
+                                report.suggestedAction!, Icons.build_outlined),
+                          ],
+                          if (report.safetyWarning != null &&
+                              report.safetyWarning!.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.severityHigh
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: AppColors.severityHigh
+                                        .withValues(alpha: 0.3)),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.error_outline,
+                                      color: AppColors.severityHigh, size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Safety Warning',
+                                          style: TextStyle(
+                                            color: AppColors.severityHigh,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          report.safetyWarning!,
+                                          style: const TextStyle(
+                                              color: AppColors.textPrimary,
+                                              fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  if (report.status == PotholeStatus.fixed) ...[
+                    const SizedBox(height: 16),
+                    _InfoSection(
+                      title: 'Resolution Info',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.check_circle,
+                                  color: AppColors.statusFixed, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Marked as Fixed by ${report.fixedByName ?? "a user"}',
+                                  style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (report.fixedMessage != null &&
+                              report.fixedMessage!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceVariant
+                                    .withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '"${report.fixedMessage}"',
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: 16),
                   _InfoSection(
                     title: 'Report Info',
@@ -206,7 +425,7 @@ class PotholeDetailScreen extends ConsumerWidget {
                               .toggle(report.id),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: hasUpvoted
-                            ? AppColors.primary.withOpacity(0.2)
+                            ? AppColors.primary.withValues(alpha: 0.2)
                             : AppColors.primary,
                         foregroundColor:
                             hasUpvoted ? AppColors.primary : Colors.white,
@@ -232,6 +451,28 @@ class PotholeDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+
+                  // Mark as Fixed Button (for other users or anyone when unfixed)
+                  if (report.status != PotholeStatus.fixed) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _showMarkFixedDialog(context, ref),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.statusFixed,
+                          side: const BorderSide(color: AppColors.statusFixed),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: const Text(
+                          'Mark as Fixed',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                 ],
               ),
@@ -239,6 +480,89 @@ class PotholeDetailScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showMarkFixedDialog(BuildContext context, WidgetRef ref) {
+    final textController =
+        TextEditingController(text: 'bro that issue is already fixed');
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text(
+            'Mark Pothole as Fixed',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Help the community by explaining how or when it was resolved.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: textController,
+                maxLines: 3,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: const InputDecoration(
+                  hintText: 'Enter details...',
+                  hintStyle: TextStyle(color: AppColors.textTertiary),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.statusFixed,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                final message = textController.text.trim();
+                final userName = ref.read(authServiceProvider).displayName;
+
+                try {
+                  await ref.read(potholeServiceProvider).markAsFixed(
+                        potholeId: report.id,
+                        fixedMessage: message,
+                        fixedByName: userName,
+                      );
+                  if (context.mounted) {
+                    Navigator.pop(context); // Close dialog
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Pothole successfully marked as fixed!'),
+                        backgroundColor: AppColors.statusFixed,
+                      ),
+                    );
+                    Navigator.pop(context); // Return to Map/List
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Submit'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -251,6 +575,112 @@ class PotholeDetailScreen extends ConsumerWidget {
       default:
         return AppColors.statusReported;
     }
+  }
+
+  Widget _buildAiTile(String label, String value, IconData icon) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: AppColors.textSecondary, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                    color: AppColors.textTertiary, fontSize: 11),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text(
+            'Delete Report',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          content: const Text(
+            'Are you sure you want to delete this report? This action cannot be undone.',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.severityHigh,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                try {
+                  Navigator.pop(context); // Close dialog
+
+                  // Show loading spinner
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const Center(
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
+                    ),
+                  );
+
+                  await ref
+                      .read(potholeServiceProvider)
+                      .deletePothole(report.id);
+
+                  if (context.mounted) {
+                    Navigator.pop(context); // Close loading spinner
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Report deleted successfully'),
+                        backgroundColor: AppColors.severityHigh,
+                      ),
+                    );
+                    Navigator.pop(context); // Return to list/map
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    Navigator.pop(context); // Close loading spinner if open
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to delete report: $e'),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -272,9 +702,9 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -308,9 +738,9 @@ class _SeverityBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(
         '${severity.label} Risk',
@@ -351,7 +781,7 @@ class _StatCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 18),

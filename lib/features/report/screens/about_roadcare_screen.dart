@@ -32,13 +32,14 @@ class AboutRoadCareScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.4),
+                    color: AppColors.primary.withValues(alpha: 0.4),
                     blurRadius: 30,
                     offset: const Offset(0, 10),
                   ),
                 ],
               ),
-              child: const Icon(Icons.report_problem_rounded, color: Colors.white, size: 52),
+              child: const Icon(Icons.report_problem_rounded,
+                  color: Colors.white, size: 52),
             ),
             const SizedBox(height: 24),
             const Text(

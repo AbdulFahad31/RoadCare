@@ -1,26 +1,36 @@
 import 'dart:async';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../report/models/pothole_report.dart';
 import '../../../core/errors/exceptions.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/geo_utils.dart';
+import '../../../core/utils/retry_utils.dart';
 
 class PotholeService {
-  final FirebaseFirestore _firestore;
+  final SupabaseClient _supabase;
 
-  PotholeService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'roadcare31');
+  PotholeService({SupabaseClient? supabaseClient})
+      : _supabase = supabaseClient ?? Supabase.instance.client;
 
-  CollectionReference<Map<String, dynamic>> get _collection =>
-      _firestore.collection(AppConstants.potholeCollection);
-
-  /// Stream of all pothole reports ordered by timestamp
+  /// Stream of all pothole reports ordered by created_at descending (Realtime)
   Stream<List<PotholeReport>> watchAllPotholes() {
-    return _collection
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snap) => snap.docs.map(PotholeReport.fromFirestore).toList());
+    return _supabase
+        .from('reports')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .map((list) =>
+            list.map((json) => PotholeReport.fromJson(json)).toList());
+  }
+
+  /// Stream of pothole reports for a specific user ordered by created_at descending
+  Stream<List<PotholeReport>> watchUserPotholes(String userId) {
+    return _supabase
+        .from('reports')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .map((list) =>
+            list.map((json) => PotholeReport.fromJson(json)).toList());
   }
 
   /// Stream of nearby potholes within radius
@@ -40,21 +50,34 @@ class PotholeService {
   /// Get a single pothole by ID
   Future<PotholeReport?> getPothole(String id) async {
     try {
-      final doc = await _collection.doc(id).get();
-      if (!doc.exists) return null;
-      return PotholeReport.fromFirestore(doc);
+      final data = await RetryUtils.retry(
+        operationName: 'getPothole',
+        operation: () =>
+            _supabase.from('reports').select().eq('id', id).maybeSingle(),
+      );
+      if (data == null) return null;
+      return PotholeReport.fromJson(data);
     } catch (e) {
       throw FirestoreException(e.toString());
     }
   }
 
-  /// Check if a duplicate report exists within radius
+  /// Check if a duplicate report exists within radius (excluding fixed ones)
   Future<bool> hasDuplicateNearby(double lat, double lng) async {
     try {
-      final reports =
-          await _collection.where('status', whereNotIn: ['fixed']).get();
-      for (final doc in reports.docs) {
-        final report = PotholeReport.fromFirestore(doc);
+      final response = await RetryUtils.retry(
+        operationName: 'hasDuplicateNearby',
+        operation: () => _supabase
+            .from('reports')
+            .select('id, latitude, longitude, status')
+            .neq('status', 'fixed'),
+      );
+
+      final reports = (response as List)
+          .map((json) => PotholeReport.fromJson(json))
+          .toList();
+
+      for (final report in reports) {
         if (GeoUtils.isWithinRadius(
           lat,
           lng,
@@ -80,46 +103,67 @@ class PotholeService {
       );
       if (isDuplicate) throw const DuplicateReportException();
 
-      final docRef = await _collection.add(report.toFirestore());
-      return docRef.id;
+      // Convert to JSON and remove 'id' if empty to let PostgreSQL generate a UUID
+      final reportData = report.toJson();
+      if (report.id.isEmpty) {
+        reportData.remove('id');
+      }
+
+      final response = await RetryUtils.retry(
+        operationName: 'addPothole',
+        operation: () =>
+            _supabase.from('reports').insert(reportData).select('id').single(),
+      );
+
+      return response['id'] as String;
     } on DuplicateReportException {
       rethrow;
-    } on FirebaseException catch (e) {
-      throw FirestoreException(e.message ?? 'Failed to add report');
+    } catch (e) {
+      throw FirestoreException('Failed to add report: ${e.toString()}');
     }
   }
 
-  /// Upvote a pothole
+  /// Upvote or cancel upvote for a pothole
   Future<void> upvotePothole(String potholeId, String userId) async {
     try {
-      final doc = await _collection.doc(potholeId).get();
-      if (!doc.exists) return;
+      final report = await getPothole(potholeId);
+      if (report == null) return;
 
-      final report = PotholeReport.fromFirestore(doc);
       final alreadyVoted = report.upvotedBy.contains(userId);
+      final List<String> newUpvotedBy;
+      final int newUpvotes;
 
       if (alreadyVoted) {
-        await _collection.doc(potholeId).update({
-          'upvotes': FieldValue.increment(-1),
-          'upvotedBy': FieldValue.arrayRemove([userId]),
-        });
+        newUpvotedBy = List<String>.from(report.upvotedBy)..remove(userId);
+        newUpvotes = report.upvotes - 1;
       } else {
-        await _collection.doc(potholeId).update({
-          'upvotes': FieldValue.increment(1),
-          'upvotedBy': FieldValue.arrayUnion([userId]),
-        });
+        newUpvotedBy = List<String>.from(report.upvotedBy)..add(userId);
+        newUpvotes = report.upvotes + 1;
       }
-    } on FirebaseException catch (e) {
-      throw FirestoreException(e.message ?? 'Failed to upvote');
+
+      await RetryUtils.retry(
+        operationName: 'upvotePothole',
+        operation: () => _supabase.from('reports').update({
+          'upvotes': newUpvotes,
+          'upvoted_by': newUpvotedBy,
+        }).eq('id', potholeId),
+      );
+    } catch (e) {
+      throw FirestoreException('Failed to upvote: ${e.toString()}');
     }
   }
 
   /// Update pothole status (admin only)
   Future<void> updateStatus(String potholeId, PotholeStatus status) async {
     try {
-      await _collection.doc(potholeId).update({'status': status.value});
-    } on FirebaseException catch (e) {
-      throw FirestoreException(e.message ?? 'Failed to update status');
+      await RetryUtils.retry(
+        operationName: 'updateStatus',
+        operation: () => _supabase.from('reports').update({
+          'status': status.value,
+        }).eq('id', potholeId),
+      );
+    } catch (e) {
+      throw FirestoreException('Failed to update status: ${e.toString()}');
     }
   }
 
@@ -127,28 +171,65 @@ class PotholeService {
   Future<void> updateSeverity(
       String potholeId, PotholeSeverity severity) async {
     try {
-      await _collection.doc(potholeId).update({'severity': severity.value});
-    } on FirebaseException catch (e) {
-      throw FirestoreException(e.message ?? 'Failed to update severity');
+      await RetryUtils.retry(
+        operationName: 'updateSeverity',
+        operation: () => _supabase.from('reports').update({
+          'severity': severity.value,
+        }).eq('id', potholeId),
+      );
+    } catch (e) {
+      throw FirestoreException('Failed to update severity: ${e.toString()}');
     }
   }
 
   /// Delete a pothole report
   Future<void> deletePothole(String potholeId) async {
     try {
-      await _collection.doc(potholeId).delete();
-    } on FirebaseException catch (e) {
-      throw FirestoreException(e.message ?? 'Failed to delete report');
+      await RetryUtils.retry(
+        operationName: 'deletePothole',
+        operation: () => _supabase.from('reports').delete().eq('id', potholeId),
+      );
+    } catch (e) {
+      throw FirestoreException('Failed to delete report: ${e.toString()}');
+    }
+  }
+
+  /// Mark pothole as fixed with a message and builder name
+  Future<void> markAsFixed({
+    required String potholeId,
+    required String fixedMessage,
+    required String fixedByName,
+  }) async {
+    try {
+      await RetryUtils.retry(
+        operationName: 'markAsFixed',
+        operation: () => _supabase.from('reports').update({
+          'status': 'fixed',
+          'fixed_message': fixedMessage,
+          'fixed_by_name': fixedByName,
+        }).eq('id', potholeId),
+      );
+    } catch (e) {
+      throw FirestoreException('Failed to mark as fixed: ${e.toString()}');
     }
   }
 
   /// Get reports sorted by upvotes for admin
   Future<List<PotholeReport>> getReportsSortedByUpvotes() async {
     try {
-      final snap = await _collection.orderBy('upvotes', descending: true).get();
-      return snap.docs.map(PotholeReport.fromFirestore).toList();
+      final response = await RetryUtils.retry(
+        operationName: 'getReportsSortedByUpvotes',
+        operation: () => _supabase
+            .from('reports')
+            .select()
+            .order('upvotes', ascending: false),
+      );
+
+      return (response as List)
+          .map((json) => PotholeReport.fromJson(json))
+          .toList();
     } catch (e) {
-      throw FirestoreException(e.toString());
+      throw FirestoreException('Failed to fetch reports: ${e.toString()}');
     }
   }
 }

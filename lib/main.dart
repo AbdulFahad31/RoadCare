@@ -1,25 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/providers/auth_providers.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'app_shell.dart';
-import 'firebase_options.dart';
 
 Future<void> main() async {
+  final startupStopwatch = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock to portrait mode
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // Set status bar style
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -27,27 +26,69 @@ Future<void> main() async {
     ),
   );
 
-  // Load environment variables
   try {
     await dotenv.load(fileName: '.env');
   } catch (_) {
     // .env may not exist yet — safe to ignore
   }
 
-  // Set Mapbox access token globally (skip if still placeholder)
   final mapboxToken = dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '';
   if (mapboxToken.isNotEmpty && !mapboxToken.contains('YOUR_')) {
     MapboxOptions.setAccessToken(mapboxToken);
   }
 
-  // Initialize Firebase (guarded — app still opens if keys are missing)
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    debugPrint('⚠️  Firebase init failed: $e');
-    debugPrint('    → Please run: flutterfire configure');
+  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+
+  if (supabaseUrl.isNotEmpty &&
+      supabaseAnonKey.isNotEmpty &&
+      !supabaseUrl.contains('YOUR_')) {
+    try {
+      await Supabase.initialize(
+        url: supabaseUrl,
+        publishableKey: supabaseAnonKey,
+      );
+      if (kDebugMode) {
+        debugPrint('🚀 Supabase initialized successfully');
+      }
+
+      // Refresh session on startup if it is expired to prevent Realtime token errors
+      final client = Supabase.instance.client;
+      final session = client.auth.currentSession;
+      if (session != null && session.isExpired) {
+        if (kDebugMode) {
+          debugPrint(
+              '🔑 Supabase session is expired on startup, refreshing...');
+        }
+        try {
+          await client.auth.refreshSession();
+          if (kDebugMode) {
+            debugPrint('🔑 Supabase session refreshed successfully');
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ Supabase session refresh failed, signing out: $e');
+          }
+          try {
+            await client.auth.signOut();
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Supabase init failed: $e');
+      }
+    }
+  } else {
+    if (kDebugMode) {
+      debugPrint('⚠️ Supabase credentials missing in .env');
+    }
+  }
+
+  startupStopwatch.stop();
+  if (kDebugMode) {
+    debugPrint(
+        '⏱️ App startup initialization completed in ${startupStopwatch.elapsedMilliseconds}ms');
   }
 
   runApp(

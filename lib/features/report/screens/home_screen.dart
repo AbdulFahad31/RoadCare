@@ -1,12 +1,14 @@
+import 'dart:ui' as ui;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import '../../../core/theme/app_colors.dart';
 import '../providers/report_providers.dart';
 import '../models/pothole_report.dart';
 import 'report_screen.dart';
-import '../widgets/map_legend_widget.dart';
-import '../widgets/nearby_stats_widget.dart';
+import 'pothole_detail_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -24,6 +26,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   late AnimationController _fabAnimController;
   late Animation<double> _fabAnim;
+
+  // Cache for dynamically generated marker icons
+  PointAnnotation? _userLocationAnnotation;
+  Uint8List? _userLocationIconBytes;
+  Uint8List? _reportedIconBytes;
+  Uint8List? _inProgressIconBytes;
+  Uint8List? _fixedIconBytes;
+
+  // Mapping of annotation IDs to PotholeReport objects for click events
+  final Map<String, PotholeReport> _annotationToReportMap = {};
 
   @override
   void initState() {
@@ -55,70 +67,188 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _mapboxMap = mapboxMap;
     _annotationManager =
         await mapboxMap.annotations.createPointAnnotationManager();
-    
-    // Enable user location dot
-    await _mapboxMap!.location.updateSettings(
-      LocationComponentSettings(
-        enabled: true,
-        pulsingEnabled: true,
-      ),
+
+    // Add click listener to route marker clicks to PotholeDetailScreen
+    _annotationManager!.addOnPointAnnotationClickListener(
+      _PointAnnotationClickListener((annotation) {
+        final report = _annotationToReportMap[annotation.id];
+        if (report != null && mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PotholeDetailScreen(report: report),
+            ),
+          );
+        }
+      }),
     );
-    
+
+    // Enable native location dot components as fallback
+    try {
+      await _mapboxMap!.location.updateSettings(
+        LocationComponentSettings(
+          enabled: true,
+          pulsingEnabled: true,
+        ),
+      );
+    } catch (_) {}
+
     setState(() => _mapReady = true);
+
+    // Initial marker draw since data might be loaded on startup
+    final reports = ref.read(allPotholesProvider).valueOrNull;
+    if (reports != null) {
+      _updateMapMarkers(reports);
+    }
+
+    final location = ref.read(currentLocationProvider).valueOrNull;
+    if (location != null) {
+      _updateUserLocationMarker(location);
+    }
   }
 
+  /// Generates a circular PNG icon with drop shadow and border dynamically in memory
+  Future<Uint8List> _createCircleMarkerBytes({
+    required Color color,
+    required double radius,
+    Color borderColor = Colors.white,
+    double borderWidth = 2.0,
+  }) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final size = (radius + borderWidth) * 2 + 4; // Padding for shadow blur
+    final center = size / 2;
+
+    // 1. Draw soft drop shadow
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.25)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
+    canvas.drawCircle(
+        Offset(center, center), radius + borderWidth - 1, shadowPaint);
+
+    // 2. Draw white border
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+        Offset(center, center), radius + borderWidth, borderPaint);
+
+    // 3. Draw fill circle
+    final fillPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(center, center), radius, fillPaint);
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(size.toInt(), size.toInt());
+    final pngBytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    return pngBytes!.buffer.asUint8List();
+  }
+
+  Future<Uint8List> _getPotholeIcon(PotholeStatus status) async {
+    switch (status) {
+      case PotholeStatus.fixed:
+        return _fixedIconBytes ??= await _createCircleMarkerBytes(
+          color: AppColors.statusFixed,
+          radius: 8.0,
+          borderColor: Colors.white,
+          borderWidth: 2.0,
+        );
+      case PotholeStatus.inProgress:
+        return _inProgressIconBytes ??= await _createCircleMarkerBytes(
+          color: AppColors.statusInProgress,
+          radius: 8.0,
+          borderColor: Colors.white,
+          borderWidth: 2.0,
+        );
+      default:
+        return _reportedIconBytes ??= await _createCircleMarkerBytes(
+          color: AppColors.statusReported,
+          radius: 8.0,
+          borderColor: Colors.white,
+          borderWidth: 2.0,
+        );
+    }
+  }
+
+  /// Places or updates the bright blue current location puck on the map
+  Future<void> _updateUserLocationMarker(geo.Position location) async {
+    if (_annotationManager == null || !_mapReady) return;
+
+    _userLocationIconBytes ??= await _createCircleMarkerBytes(
+      color: const Color(0xFF007AFF), // iOS/Mapbox Blue puck
+      radius: 9.0,
+      borderColor: Colors.white,
+      borderWidth: 3.0,
+    );
+
+    if (_userLocationAnnotation != null) {
+      try {
+        await _annotationManager!.delete(_userLocationAnnotation!);
+      } catch (_) {}
+    }
+
+    final options = PointAnnotationOptions(
+      geometry: Point(
+        coordinates: Position(location.longitude, location.latitude),
+      ),
+      image: _userLocationIconBytes,
+    );
+
+    _userLocationAnnotation = await _annotationManager!.create(options);
+  }
+
+  /// Updates and draws all reported pothole markers on the map
   Future<void> _updateMapMarkers(List<PotholeReport> reports) async {
     if (_annotationManager == null || !_mapReady) return;
 
+    // Delete all annotations and clear the click tracking map
     await _annotationManager!.deleteAll();
+    _annotationToReportMap.clear();
+
+    // Re-draw user location since deleteAll removes it too
+    final userLocation = ref.read(currentLocationProvider).valueOrNull;
+    if (userLocation != null) {
+      _userLocationAnnotation = null;
+      await _updateUserLocationMarker(userLocation);
+    }
 
     for (final report in reports) {
-      final colorInt = _getStatusColorInt(report.status);
+      final iconBytes = await _getPotholeIcon(report.status);
 
       final options = PointAnnotationOptions(
         geometry: Point(
           coordinates: Position(report.longitude, report.latitude),
         ),
-        textField: report.id,
-        textColor: colorInt,
-        textSize: _getSeveritySize(report.severity),
-        textOffset: [0, 0],
+        image: iconBytes,
       );
 
-      await _annotationManager!.create(options);
-    }
-  }
-
-  int _getStatusColorInt(PotholeStatus status) {
-    switch (status) {
-      case PotholeStatus.fixed:
-        return AppColors.statusFixed.toARGB32();
-      case PotholeStatus.inProgress:
-        return AppColors.statusInProgress.toARGB32();
-      default:
-        return AppColors.statusReported.toARGB32();
-    }
-  }
-
-  double _getSeveritySize(PotholeSeverity severity) {
-    switch (severity) {
-      case PotholeSeverity.high:
-        return 16.0;
-      case PotholeSeverity.medium:
-        return 13.0;
-      default:
-        return 10.0;
+      final annotation = await _annotationManager!.create(options);
+      _annotationToReportMap[annotation.id] = report;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Listen to changes in pothole list and user location to update markers reactively
+    ref.listen<AsyncValue<List<PotholeReport>>>(allPotholesProvider,
+        (previous, next) {
+      next.whenData((reports) {
+        _updateMapMarkers(reports);
+      });
+    });
+
+    ref.listen<AsyncValue<geo.Position?>>(currentLocationProvider,
+        (previous, next) {
+      next.whenData((location) {
+        if (location != null) {
+          _updateUserLocationMarker(location);
+        }
+      });
+    });
+
     final locationAsync = ref.watch(currentLocationProvider);
     final reportsAsync = ref.watch(allPotholesProvider);
-
-    if (_mapReady) {
-      reportsAsync.whenData((reports) => _updateMapMarkers(reports));
-    }
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -200,13 +330,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
               ],
             ),
-          ),
-
-          // Legend (bottom left)
-          const Positioned(
-            bottom: 20,
-            left: 16,
-            child: MapLegendWidget(),
           ),
 
           // Custom FAB to avoid overlap
@@ -361,29 +484,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           zoom: 15.0,
         ),
       );
+      _updateUserLocationMarker(location);
     } else {
       await ref.read(currentLocationProvider.notifier).fetchLocation();
       final newState = ref.read(currentLocationProvider);
-      
+
       if (newState.hasError && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(newState.error.toString().replaceAll('Exception: ', '')),
+            content:
+                Text(newState.error.toString().replaceAll('Exception: ', '')),
             backgroundColor: AppColors.error,
           ),
         );
       } else if (newState.valueOrNull != null && _mapboxMap != null) {
+        final newLoc = newState.valueOrNull!;
         await _mapboxMap!.setCamera(
           CameraOptions(
             center: Point(
-              coordinates: Position(
-                newState.valueOrNull!.longitude,
-                newState.valueOrNull!.latitude,
-              ),
+              coordinates: Position(newLoc.longitude, newLoc.latitude),
             ),
             zoom: 15.0,
           ),
         );
+        _updateUserLocationMarker(newLoc);
       }
     }
   }
@@ -394,5 +518,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     await _mapboxMap!.loadStyleURI(
       _isDarkStyle ? MapboxStyles.DARK : MapboxStyles.LIGHT,
     );
+  }
+}
+
+class _PointAnnotationClickListener extends OnPointAnnotationClickListener {
+  final void Function(PointAnnotation) onClick;
+  _PointAnnotationClickListener(this.onClick);
+
+  @override
+  void onPointAnnotationClick(PointAnnotation annotation) {
+    onClick(annotation);
   }
 }
