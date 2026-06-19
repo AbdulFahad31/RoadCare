@@ -11,98 +11,248 @@
   <img src="https://img.shields.io/badge/Supabase-Backend-3ECF8E?style=flat-square&logo=supabase&logoColor=white" />
   <img src="https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=flat-square&logo=postgresql&logoColor=white" />
   <img src="https://img.shields.io/badge/Google-Gemini%202.5%20Flash-4285F4?style=flat-square&logo=google&logoColor=white" />
-  <img src="https://img.shields.io/badge/Mapbox-Maps-00C6AE?style=flat-square&logo=mapbox&logoColor=white" />
+  <img src="https://img.shields.io/badge/Google%20Maps-Location-34A853?style=flat-square&logo=googlemaps&logoColor=white" />
   <img src="https://img.shields.io/badge/Riverpod-State%20Management-6C63FF?style=flat-square" />
+  <img src="https://img.shields.io/badge/Status-Production%20Ready-success?style=flat-square" />
 </p>
 
 </div>
 
 ---
 
-## 📖 Overview
+# Overview
 
-**RoadCare** is a premium, community-driven road hazard and pothole reporting application built with **Flutter**, **Supabase**, and **Google Gemini 2.5 Flash**. The app allows users to quickly report potholes, capture GPS location and photos, upvote nearby active issues to prevent duplicate reports, and view reports live on Mapbox. 
+RoadCare is an **AI-assisted mobile application** built using **Flutter**, **Supabase**, and **Google Gemini 2.5 Flash** to modernize road damage reporting.
 
-With an integrated **Gemini 2.5 Flash Assistant**, the app analyzes uploaded road images to generate professional road inspection reports and populate reporting forms automatically. An offline synchronization queue guarantees that reports created without active internet are cached locally and synchronized silently in the background when connectivity returns.
+Users can capture or upload road images, automatically analyze the damage using AI, generate professional inspection reports, and submit geo-tagged reports for efficient road maintenance.
 
----
-
-## ⚡ Core Features
-
-* **🤖 AI Road Inspection Assistant**: Capture or upload road images, analyze them using Google Gemini 2.5 Flash, and automatically estimate pothole dimensions (diameter & depth), severity, priority, suggested actions, and safety warnings.
-* **📶 Offline Sync Queue**: Submitted reports are serialized locally via `SharedPreferences` when offline. The app listens to connectivity changes and automatically uploads queued reports in the background when internet is restored.
-* **🗺️ Realtime Mapbox Maps**: Reports are rendered on Mapbox with status-coded colors and size-scaled markers (severity-based).
-* **👍 Upvote & Confirm Issues**: Confirm active issues with upvotes to draw maintenance attention and prevent redundant reports.
-* **🗑️ Creator Deletion**: Users can delete their own reported potholes directly from the details page.
-* **📊 Admin Dashboard**: Authority users can search, filter, sort, update report status (Reported, In Progress, Fixed), and modify risk levels.
+The application combines **mobile development**, **cloud backend**, **computer vision**, and **Generative AI** into a scalable production-ready solution.
 
 ---
 
-## 🛠️ Performance Optimizations & Resilience
+# Features
 
-1. **Database Indexing**: Composite and spatial indexes are created on sorted and filtered columns (`created_at`, `status`, `severity`, `user_id`, and `latitude`/`longitude`) to accelerate queries and coordinate scans.
-2. **PostgREST Select Optimization**: Reduced network and serialization overhead by fetching only required columns (`id`, `latitude`, `longitude`, `status`) during nearby duplicate scans.
-3. **Resilient Network Client**: Wrapped Supabase database reads/writes in an exponential backoff retry handler with randomized jitter (+/- 20%) to gracefully survive temporary connection drops.
-4. **Startup Latency Tuning**: Parallelized initialization steps (loading `.env`, configuring Mapbox token, initializing Supabase, and caching states) to complete startup initializations in **under 80ms**.
-5. **Pre-Upload Compression**: Picks and compresses images down to **70% quality** and a max dimension of **1024px** prior to upload to optimize storage usage and minimize transfer times.
+| Feature | Description |
+|---------|-------------|
+| 🤖 AI Road Analysis | Analyze uploaded road images using Google Gemini 2.5 Flash |
+| 🧠 AI Report Generation | Automatically generate structured road inspection reports |
+| ⚠ Damage Classification | Detect damage type and classify severity |
+| 🚧 Repair Recommendation | AI suggests repair priority and safety warning |
+| 📍 GPS Location | Automatically capture user's location |
+| 🗺 Google Maps | Display reported road damages on an interactive map |
+| 📷 Image Upload | Upload and securely store road damage images |
+| ☁ Supabase Storage | Cloud storage for uploaded images |
+| 🔐 Authentication | Secure login using Supabase Authentication |
+| 🗄 PostgreSQL Database | Store reports using Supabase PostgreSQL |
+| ⚡ Fast Performance | Optimized image uploads, API calls, and caching |
+| 🛡 Secure Backend | Row Level Security (RLS) enabled for data protection |
 
 ---
 
-## 🏗️ Folder Structure (Clean Architecture)
+# AI Workflow
 
 ```text
-lib/
-├── app_shell.dart                     # Main app navigation wrapper (tabs)
-├── main.dart                          # Application entry point & parallelized startup
-├── core/                              # Shared core blocks
-│   ├── constants/                     # Shared constants (Table/Bucket names)
-│   ├── errors/                        # Custom Exceptions
-│   ├── theme/                         # Curated app dark theme configuration
-│   └── utils/                         # Geolocation, extension, and retry utilities
-└── features/                          # Feature-specific modules (Feature-First)
-    ├── admin/                         # Admin dashboard features
-    ├── auth/                          # User Auth services, providers, and screens
-    └── report/                        # Pothole report creation, detail views, and offline sync
+Capture Image
+       │
+       ▼
+ Google Gemini 2.5 Flash
+       │
+       ▼
+Analyze Road Damage
+       │
+       ├── Damage Type
+       ├── Severity
+       ├── Repair Priority
+       ├── Estimated Dimensions
+       ├── Safety Warning
+       └── Professional Report
+       │
+       ▼
+User Review
+       │
+       ▼
+Submit Report
+       │
+       ▼
+Supabase Database
 ```
 
 ---
 
-## 🚀 Setup & Running Locally
+# Tech Stack
 
-### 1. Supabase Initialization
-1. Create a new Supabase Project.
-2. Run the database migration script [supabase/migrations/schema.sql](file:///c:/Users/abdul/Downloads/RoadCare/supabase/migrations/schema.sql) in your Supabase SQL Editor.
-3. Run the database performance indexes migration [supabase/migrations/add_performance_indexes.sql](file:///c:/Users/abdul/Downloads/RoadCare/supabase/migrations/add_performance_indexes.sql) to set up optimal indexes.
-4. Create a public storage bucket named `road-images` to store upload photos.
+| Layer | Technology |
+|--------|------------|
+| Mobile App | Flutter |
+| Language | Dart |
+| Backend | Supabase |
+| Database | PostgreSQL |
+| Authentication | Supabase Auth |
+| Cloud Storage | Supabase Storage |
+| AI | Google Gemini 2.5 Flash |
+| Maps | Google Maps |
+| State Management | Riverpod |
+| Architecture | Clean Architecture |
+| API Communication | REST API |
 
-### 2. Local Environment Setup
-Create a `.env` file in the project root containing your credentials (see [.env.example](file:///c:/Users/abdul/Downloads/RoadCare/.env.example)):
-```env
-MAPBOX_ACCESS_TOKEN=pk.your_mapbox_token_here
-SUPABASE_URL=https://your_project_id.supabase.co
-SUPABASE_ANON_KEY=your_supabase_anon_key_here
-GEMINI_API_KEY=your_gemini_api_key_here
+---
+
+# Architecture
+
+```
+lib/
+│
+├── core/
+│   ├── constants/
+│   ├── errors/
+│   ├── theme/
+│   └── utils/
+│
+├── features/
+│   ├── auth/
+│   ├── report/
+│   ├── map/
+│   ├── profile/
+│   └── notifications/
+│
+├── services/
+│
+├── widgets/
+│
+└── main.dart
 ```
 
-### 3. Launching the App
-Run the following commands in your shell:
+---
+
+# AI Report Example
+
+```json
+{
+  "damage_type": "Pothole",
+  "severity": "High",
+  "repair_priority": "Immediate",
+  "confidence": 95,
+  "estimated_diameter_cm": 68,
+  "estimated_depth_cm": 12,
+  "description": "Large pothole located near the center lane with surrounding pavement cracks.",
+  "safety_warning": "High accident risk for two-wheelers.",
+  "suggested_action": "Immediate Repair"
+}
+```
+
+---
+
+# Performance Optimizations
+
+- Image compression before upload
+- Cached network images
+- Lazy loading
+- Optimized Riverpod providers
+- Retry mechanism for API requests
+- Timeout handling
+- Production-level exception handling
+- Database query optimization
+- Supabase indexes
+- Optimized Google Maps rendering
+- AI request caching
+
+---
+
+# Security
+
+- Supabase Row Level Security (RLS)
+- Environment variable configuration
+- Secure authentication
+- API key protection
+- Input validation
+- JSON response validation
+- Secure database access
+
+---
+
+# Getting Started
+
+## Prerequisites
+
+- Flutter 3.x
+- Supabase Project
+- Google AI Studio API Key
+- Google Maps API Key
+
+---
+
+## Installation
+
 ```bash
-# Get flutter dependencies
+git clone https://github.com/AbdulFahad31/RoadCare.git
+
+cd RoadCare
+
 flutter pub get
 
-# Format code
-dart format .
-
-# Run static checks and unit tests
-flutter analyze
-flutter test
-
-# Run app on connected device
 flutter run
 ```
 
 ---
 
-## 📄 License
+## Environment Variables
+
+Create a `.env` file:
+
+```env
+SUPABASE_URL=YOUR_SUPABASE_URL
+
+SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+```
+
+---
+
+# Production Features
+
+```
+✅ Flutter
+✅ Supabase Authentication
+✅ PostgreSQL
+✅ Supabase Storage
+✅ Google Maps
+✅ GPS Tracking
+✅ AI Report Generation
+✅ Damage Classification
+✅ Repair Priority Prediction
+✅ Security (RLS)
+✅ Repository Pattern
+✅ Clean Architecture
+✅ Riverpod
+✅ Performance Optimizations
+```
+
+---
+
+# Future Enhancements
+
+- [ ] Government Admin Dashboard
+- [ ] Push Notifications
+- [ ] Offline Synchronization
+- [ ] Duplicate Report Detection using AI
+- [ ] Road Condition Heatmap
+- [ ] Video-based Road Inspection
+- [ ] Multi-language Support
+- [ ] Analytics Dashboard
+
+---
+
+# License
 
 This project was developed for educational, research, and portfolio purposes.
+
+---
+
+<div align="center">
+
+### Built with ❤️ using Flutter • Supabase • Google Gemini AI
+
+If you found this project interesting, consider giving it a ⭐
+
+</div>
